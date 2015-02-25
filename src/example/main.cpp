@@ -32,11 +32,6 @@ int main(int argc, char** argv)
   SWARM_LOG_CRITICAL("This is a sample CRITICAL log");
   SWARM_LOG_ERROR("This is a sample ERROR log");
   SWARM_LOG_WARNING("This is a sample WARNING log");
-  
-  boost::filesystem::remove(path);
-  
-  std::cin.get();
-  
   SWARM_LOG_NOTICE("This is a sample NOTICE log");
   SWARM_LOG_INFO("This is a sample INFO log");
   SWARM_LOG_DEBUG("This is a sample DEBUG log");

@@ -24,6 +24,7 @@
 #include <string>
 #include <sstream>
 #include <boost/noncopyable.hpp>
+#include <boost/thread.hpp>
 
 
 namespace swarm
@@ -31,6 +32,9 @@ namespace swarm
   class Logger : public boost::noncopyable
   {
   public:
+    
+    typedef boost::mutex mutex;
+    typedef boost::lock_guard<mutex> mutex_lock;
     
     enum Priority
     {
@@ -61,6 +65,7 @@ namespace swarm
     );
     ///
     /// Open the log file specified by path
+    /// If error is encountered, getLastError()should return the error string
     ///
     
     bool open(
@@ -69,6 +74,7 @@ namespace swarm
     );
     ///
     /// Open the log file specified by path
+    /// If error is encountered, getLastError()should return the error string
     ///
     
     bool open(
@@ -78,6 +84,7 @@ namespace swarm
     );
     ///
     /// Open the log file specified by path
+    /// If error is encountered, getLastError()should return the error string
     ///
     
     bool open(
@@ -88,11 +95,7 @@ namespace swarm
     );
     ///
     /// Open the log file specified by path
-    ///
-       
-    void close();
-    ///
-    /// Close the logging channel
+    /// If error is encountered, getLastError()should return the error string
     ///
     
     const std::string& getName() const;
@@ -160,14 +163,14 @@ namespace swarm
     /// Log a message in debug level 
     ///
     
-    bool willLog(Priority priority) const;
-    ///
-    /// Return true if priority is >= _priority
-    ///
-    
     void trace(const std::string& log);
     ///
     /// Log a message in trace level 
+    ///
+    
+    bool willLog(Priority priority) const;
+    ///
+    /// Return true if priority is >= _priority
     ///
     
     static Logger* instance();
@@ -179,12 +182,47 @@ namespace swarm
     ///
     /// Delete the default logger instance
     ///
-
-    bool verifyLogFile();
+    
+    bool isOpen() const;
+    ///
+    /// Returns true if the logger is open and is in ready state 
+    ///
+    
+    const std::string& getLastError() const;
+    ///
+    /// Returns the error string after a failure to open the logger
+    ///
+    
+    void enableVerification(bool enable);
+    ///
+    /// Enable/Disable log file verification.  If disabled log file
+    /// will not be reopened if deleted from the disk.
+    /// Default:  true
+    ///
+    
+    void setVerificationInterval(unsigned int seconds);
+    ///
+    /// Set the verification interval.  This is expressed un seconds.
+    /// Default:  5 seconds
+    ///
+    
+  protected:
+    void close();
+    ///
+    /// Close the logging channel.  This is not a thread safe call
+    /// and is intended to be called within the logger internals only.
+    /// If applications need to close a logger, it must simply delete
+    /// the old instance and create a new instance.
+    ///
+    
+    bool verifyLogFile(bool force);
     ///
     /// Ensure that the log file exists.
     /// if not, reopen it
-    ///
+    /// if force is true, verification will take place irregardless of the
+    /// verification interval.  This is not a thread safe call
+    /// and is intended to be called within the logger internals only.
+    
   private:
     static Logger* _pLoggerInstance; /// Pointer to the default logger instance
     std::string _name; /// The logger name 
@@ -195,8 +233,12 @@ namespace swarm
     Priority _priority; /// The log priority level
     unsigned int _instanceCount;  /// USed to reconstruct a new name for the logger
     std::string _internalName;  /// The internal name of this logger
-    std::time_t _lastVerifyTime;
-    bool _enableVerfication;
+    std::time_t _lastVerifyTime;  /// The time the last verification was done
+    bool _enableVerification; /// enable/disable verification
+    unsigned int _verificationInterval; /// Expiration for verification expressed in seconds
+    bool _isOpen;  /// Flag indicator if logger is open
+    std::string _lastError;  /// last error encountered after a logger function is invoked
+    mutex _mutex;  /// Internal mutex
   };
   
   //
@@ -228,6 +270,26 @@ namespace swarm
     return _priority;
   }
   
+  inline bool Logger::isOpen() const
+  {
+    return _isOpen;
+  }
+  
+  inline const std::string& Logger::getLastError() const
+  {
+    return _lastError;
+  }
+  
+  inline void Logger::enableVerification(bool enable)
+  {
+    _enableVerification = enable;
+  }
+  
+  inline void Logger::setVerificationInterval(unsigned int seconds)
+  {
+    _verificationInterval = seconds;
+  }
+
 } // swarm
 
 //
@@ -290,5 +352,5 @@ namespace swarm
   swarm::Logger::instance()->trace(strm.str()); \
 }
 
-#endif	/* LOGGER_H */
+#endif	// SWARM_LOGGER_H_INCLUDED
 

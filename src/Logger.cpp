@@ -27,6 +27,7 @@
 #include "Poco/Message.h"
 #include "Poco/Logger.h"
 #include "Poco/Timestamp.h"
+#include "Poco/LogStream.h"
 #include <iostream>
 #include <sstream>
 #include <boost/lexical_cast.hpp>
@@ -59,11 +60,42 @@ namespace swarm
     delete Logger::_pLoggerInstance;
     Logger::_pLoggerInstance = 0;
   }
-   
+  
+  static Poco::Message::Priority poco_priority(swarm::Logger::Priority priority)
+  {
+    switch (priority)
+    {
+      case swarm::Logger::PRIO_FATAL:
+        return Poco::Message::PRIO_FATAL;
+      case swarm::Logger::PRIO_CRITICAL:
+        return Poco::Message::PRIO_CRITICAL;
+      case swarm::Logger::PRIO_ERROR:
+        return Poco::Message::PRIO_ERROR;
+      case swarm::Logger::PRIO_WARNING:
+        return Poco::Message::PRIO_WARNING;
+      case swarm::Logger::PRIO_NOTICE:
+        return Poco::Message::PRIO_NOTICE;
+      case swarm::Logger::PRIO_INFORMATION:
+        return Poco::Message::PRIO_INFORMATION;
+      case swarm::Logger::PRIO_DEBUG:
+        return Poco::Message::PRIO_DEBUG;
+      case swarm::Logger::PRIO_TRACE:
+        return Poco::Message::PRIO_TRACE;
+    }
+    
+    //
+    // Someone is too drunk to code.  Should never get here.
+    //
+    assert(false);
+  }
+    
   Logger::Logger(const std::string& name) :
     _name(name),
     _instanceCount(0),
-    _lastVerifyTime(0)
+    _lastVerifyTime(0),
+    _isOpen(false),
+    _enableVerification(true),
+    _verificationInterval(DEFAULT_VERIFY_TTL)
   {
     std::ostringstream strm;
     strm << _name << "-" << _instanceCount;
@@ -72,6 +104,11 @@ namespace swarm
 
   Logger::~Logger()
   {
+    //
+    // Grab the mutex before calling close to make sure we do not corrupt
+    // any pointers within the current executing log message
+    //
+    mutex_lock lock(_mutex);
     close();
   }
 
@@ -107,6 +144,12 @@ namespace swarm
     unsigned int purgeCount 
   )
   {
+    if (_isOpen)
+    {
+      warning("Logger::open invoked while already in open state.  Close the logger first by calling Logger::close()");
+      return false;
+    }
+    
     try
     {
       _path = path;
@@ -126,42 +169,58 @@ namespace swarm
         fileChannel->setProperty("purgeCount", strPurgeCount);
       }
 
+      //
+      // increment the instance name so that we use a 
+      // new logger instance when we open/reopen the channel
+      //
+      std::ostringstream strmName;
+      strmName << _name << "-" << ++_instanceCount;
+      _internalName = strmName.str();
+      
       Poco::AutoPtr<Poco::Formatter> formatter(new Poco::PatternFormatter(format.c_str()));
       Poco::AutoPtr<Poco::Channel> formattingChannel(new Poco::FormattingChannel(formatter, fileChannel));
-      Poco::Logger::create(_internalName, formattingChannel, priority);
+      Poco::Logger::create(_internalName, formattingChannel, poco_priority(priority));
       
       Poco::Logger* pLogger = Poco::Logger::has(_internalName);
       if (pLogger)
       {
+        
+        
         std::ostringstream log;
         log << "Logger::open(" << _internalName << ") path: " << _path;
-        pLogger->notice(log.str());
+        
+        Poco::LogStream logStrm(*pLogger);
+        logStrm.notice() << log.str() << std::endl;
+          
+        _isOpen = true;
       }
       else
       {
-        return false;
+        _isOpen = false;
       }
     }
     catch(const std::exception& e)
     {
       std::cerr << "Logger::open(" << _internalName << ") << exception: " << e.what() << std::endl;
       close();
-      return false;
+      _isOpen = false;
     }
     catch(...)
     {
       std::cerr << "Logger::open unknown exception" << std::endl;
       close();
-      return false;
+      _isOpen = false;
     }
     
-    return true;
+    return _isOpen;
   }
 
   void Logger::close()
   {
-    Poco::Logger::destroy(_internalName);
-    _path = "";
+    if (Poco::Logger::has(_internalName))
+      Poco::Logger::destroy(_internalName);
+    
+    _isOpen = Poco::Logger::has(_internalName);
   }
  
   void Logger::setPriority(Logger::Priority priority)
@@ -170,7 +229,7 @@ namespace swarm
     Poco::Logger* pLogger = Poco::Logger::has(_internalName);
     if (pLogger)
     {
-      pLogger->setLevel(priority);
+      pLogger->setLevel(poco_priority(priority));
     }
   }
   
@@ -181,7 +240,16 @@ namespace swarm
 
   void Logger::fatal(const std::string& log)
   {
-    if (willLog(PRIO_FATAL) && verifyLogFile())
+    //
+    // We need to make this thread safe or calls from 
+    // different thread might try to reopen the logger
+    // at the same time when calling verifyLogFile.
+    // This can result to a segmentation fault if pLogger
+    // is released from another thread
+    //
+    mutex_lock lock(_mutex);
+    
+    if (willLog(PRIO_FATAL) && (_enableVerification ? verifyLogFile(false) : isOpen()) )
     {
       Poco::Logger* pLogger = Poco::Logger::has(_internalName);
       if (pLogger)
@@ -193,7 +261,16 @@ namespace swarm
 
   void Logger::critical(const std::string& log)
   {
-    if (willLog(PRIO_CRITICAL) && verifyLogFile())
+    //
+    // We need to make this thread safe or calls from 
+    // different thread might try to reopen the logger
+    // at the same time when calling verifyLogFile.
+    // This can result to a segmentation fault if pLogger
+    // is released from another thread
+    //
+    mutex_lock lock(_mutex);
+    
+    if (willLog(PRIO_CRITICAL) && (_enableVerification ? verifyLogFile(false) : isOpen()))
     {
       Poco::Logger* pLogger = Poco::Logger::has(_internalName);
       if (pLogger)
@@ -205,7 +282,16 @@ namespace swarm
 
   void Logger::error(const std::string& log)
   {
-    if (willLog(PRIO_ERROR) && verifyLogFile())
+    //
+    // We need to make this thread safe or calls from 
+    // different thread might try to reopen the logger
+    // at the same time when calling verifyLogFile.
+    // This can result to a segmentation fault if pLogger
+    // is released from another thread
+    //
+    mutex_lock lock(_mutex);
+    
+    if (willLog(PRIO_ERROR) && (_enableVerification ? verifyLogFile(false) : isOpen()))
     {
       Poco::Logger* pLogger = Poco::Logger::has(_internalName);
       if (pLogger)
@@ -217,7 +303,16 @@ namespace swarm
 
   void Logger::warning(const std::string& log)
   {
-    if (willLog(PRIO_WARNING) && verifyLogFile())
+    //
+    // We need to make this thread safe or calls from 
+    // different thread might try to reopen the logger
+    // at the same time when calling verifyLogFile.
+    // This can result to a segmentation fault if pLogger
+    // is released from another thread
+    //
+    mutex_lock lock(_mutex);
+    
+    if (willLog(PRIO_WARNING) && (_enableVerification ? verifyLogFile(false) : isOpen()))
     {
       Poco::Logger* pLogger = Poco::Logger::has(_internalName);
       if (pLogger)
@@ -229,7 +324,16 @@ namespace swarm
 
   void Logger::notice(const std::string& log)
   {
-    if (willLog(PRIO_NOTICE) && verifyLogFile())
+    //
+    // We need to make this thread safe or calls from 
+    // different thread might try to reopen the logger
+    // at the same time when calling verifyLogFile.
+    // This can result to a segmentation fault if pLogger
+    // is released from another thread
+    //
+    mutex_lock lock(_mutex);
+    
+    if (willLog(PRIO_NOTICE) && (_enableVerification ? verifyLogFile(false) : isOpen()))
     {
       Poco::Logger* pLogger = Poco::Logger::has(_internalName);
       if (pLogger)
@@ -241,7 +345,16 @@ namespace swarm
 
   void Logger::information(const std::string& log)
   {
-    if (willLog(PRIO_INFORMATION) && verifyLogFile())
+    //
+    // We need to make this thread safe or calls from 
+    // different thread might try to reopen the logger
+    // at the same time when calling verifyLogFile.
+    // This can result to a segmentation fault if pLogger
+    // is released from another thread
+    //
+    mutex_lock lock(_mutex);
+    
+    if (willLog(PRIO_INFORMATION) && (_enableVerification ? verifyLogFile(false) : isOpen()))
     {
       Poco::Logger* pLogger = Poco::Logger::has(_internalName);
       if (pLogger)
@@ -253,7 +366,16 @@ namespace swarm
 
   void Logger::debug(const std::string& log)
   {
-    if (willLog(PRIO_DEBUG) && verifyLogFile())
+    //
+    // We need to make this thread safe or calls from 
+    // different thread might try to reopen the logger
+    // at the same time when calling verifyLogFile.
+    // This can result to a segmentation fault if pLogger
+    // is released from another thread
+    //
+    mutex_lock lock(_mutex);
+    
+    if (willLog(PRIO_DEBUG) && (_enableVerification ? verifyLogFile(false) : isOpen()))
     {
       Poco::Logger* pLogger = Poco::Logger::has(_internalName);
       if (pLogger)
@@ -265,7 +387,16 @@ namespace swarm
 
   void Logger::trace(const std::string& log)
   {
-    if (willLog(PRIO_TRACE) && verifyLogFile())
+    //
+    // We need to make this thread safe or calls from 
+    // different thread might try to reopen the logger
+    // at the same time when calling verifyLogFile.
+    // This can result to a segmentation fault if pLogger
+    // is released from another thread
+    //
+    mutex_lock lock(_mutex);
+    
+    if (willLog(PRIO_TRACE) && (_enableVerification ? verifyLogFile(false) : isOpen()))
     {
       Poco::Logger* pLogger = Poco::Logger::has(_internalName);
       if (pLogger)
@@ -275,12 +406,20 @@ namespace swarm
     }
   }
   
-  bool Logger::verifyLogFile()
-  {
+  bool Logger::verifyLogFile(bool force)
+  {    
+    if (!_isOpen)
+    {
+      //
+      // log file cannot be verified because logger is nit open
+      //
+      return false;
+    }
+    
     Poco::Timestamp timeStamp;
     std::time_t now = timeStamp.epochTime();
     
-    if (now - _lastVerifyTime < DEFAULT_VERIFY_TTL)
+    if (!force && (now - _lastVerifyTime < _verificationInterval))
     {
       return true; // TTL for this file has not yet expired
     }
@@ -290,20 +429,14 @@ namespace swarm
     if (!_path.empty() && !boost::filesystem::exists(_path))
     {
       //
-      // Make sure we preserve the _path because close() will empty it out.
+      // Close the old logger.  We are about to reopen a new one
       //
-      std::string oldPath = _path;    
       close();
       
-      ++_instanceCount;
-      std::ostringstream strm;
-      strm << _name << "-" << _instanceCount;
-      _internalName = strm.str();
-      
-      return open(oldPath, _priority, _format, _purgeCount); 
+      return open(_path, _priority, _format, _purgeCount); 
     }
 
-    return !_path.empty();
+    return _isOpen;
   }
 
 } /// swarm
