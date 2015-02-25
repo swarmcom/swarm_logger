@@ -26,7 +26,7 @@ int main(int argc, char** argv)
 {
   boost::filesystem::path path("/home/joegen/Desktop/sample.log");
   
-  swarm::Logger::instance()->open(path.string(), swarm::Logger::PRIO_TRACE);
+  swarm::Logger::instance()->open(path.string(), swarm::Logger::PRIO_INFORMATION);
   
   SWARM_LOG_FATAL("This is a sample FATAL log");
   SWARM_LOG_CRITICAL("This is a sample CRITICAL log");
@@ -36,6 +36,8 @@ int main(int argc, char** argv)
   SWARM_LOG_INFO("This is a sample INFO log");
   SWARM_LOG_DEBUG("This is a sample DEBUG log");
   SWARM_LOG_TRACE("This is a sample TRACE log");
+  
+  swarm::Logger::releaseInstance();
   
   return 0;
 }
