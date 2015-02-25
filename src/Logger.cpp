@@ -184,30 +184,28 @@ namespace swarm
       Poco::Logger* pLogger = Poco::Logger::has(_internalName);
       if (pLogger)
       {
-        
-        
-        std::ostringstream log;
-        log << "Logger::open(" << _internalName << ") path: " << _path;
-        
         Poco::LogStream logStrm(*pLogger);
-        logStrm.notice() << log.str() << std::endl;
+        logStrm.notice() << "Logger::open(" << _internalName << ") path: " << _path << std::endl;
           
+        _lastError = "";
         _isOpen = true;
       }
       else
       {
+        _lastError = "Logger::open - Poco::Logger is null";
         _isOpen = false;
       }
     }
     catch(const std::exception& e)
     {
-      std::cerr << "Logger::open(" << _internalName << ") << exception: " << e.what() << std::endl;
+      _lastError = "Logger::open - ";
+      _lastError += e.what();
       close();
       _isOpen = false;
     }
     catch(...)
     {
-      std::cerr << "Logger::open unknown exception" << std::endl;
+      _lastError = "Logger::open unknown exception";
       close();
       _isOpen = false;
     }
@@ -411,7 +409,7 @@ namespace swarm
     if (!_isOpen)
     {
       //
-      // log file cannot be verified because logger is nit open
+      // log file cannot be verified because logger is not open
       //
       return false;
     }
