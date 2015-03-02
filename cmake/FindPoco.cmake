@@ -118,21 +118,22 @@ IF(Poco_INCLUDE_DIR)
 
   set( Poco_LIBRARIES "") #reset
   IF ( NOT Poco_LIBRARIES )
-    FIND_LIBRARY(Poco_LIBRARY_Zip NAMES PocoZip PocoZipd PATH_SUFFIXES ${SUFFIX_FOR_LIBRARY_PATH} PATHS
-      # Look in other places.
-      ${Poco_INCLUDE_DIR}
-      ${POCO_DIR_SEARCH}
-      # Help the user find it if we cannot.
-      DOC "The ${POCO_LIBRARY_PATH_DESCRIPTION}"
-    )
-  FIND_LIBRARY(Poco_LIBRARY_Found NAMES PocoFoundation PocoFoundationd PATH_SUFFIXES ${SUFFIX_FOR_LIBRARY_PATH} PATHS
-      # Look in other places.
-      ${Poco_INCLUDE_DIR}
-      ${POCO_DIR_SEARCH}
-      # Help the user find it if we cannot.
-      DOC "The ${POCO_LIBRARY_PATH_DESCRIPTION}"
-    )
-  set( Poco_LIBRARIES     "${Poco_LIBRARY_Found};${Poco_LIBRARY_Zip}" CACHE FILEPATH "Poco libraries names" FORCE )
+    
+    FIND_LIBRARY(Poco_LIBRARY_Found NAMES PocoFoundation PocoFoundationd PATH_SUFFIXES ${SUFFIX_FOR_LIBRARY_PATH} PATHS
+        # Look in other places.
+        ${Poco_INCLUDE_DIR}
+        ${POCO_DIR_SEARCH}
+        # Help the user find it if we cannot.
+        DOC "The ${POCO_LIBRARY_PATH_DESCRIPTION}"
+      )
+    FIND_LIBRARY(Poco_LIBRARY_Util NAMES PocoUtil PocoUtild PATH_SUFFIXES ${SUFFIX_FOR_LIBRARY_PATH} PATHS
+        # Look in other places.
+        ${Poco_INCLUDE_DIR}
+        ${POCO_DIR_SEARCH}
+        # Help the user find it if we cannot.
+        DOC "The ${POCO_LIBRARY_PATH_DESCRIPTION}"
+      )
+    set( Poco_LIBRARIES     "${Poco_LIBRARY_Found};${Poco_LIBRARY_Util}" CACHE FILEPATH "Poco libraries names" FORCE )
 
   endif()
 

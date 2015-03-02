@@ -2,13 +2,15 @@
 set(Boost_NO_BOOST_CMAKE ON)
 
 find_package(Boost COMPONENTS filesystem system thread REQUIRED)
+find_package(Poco REQUIRED)
 
-find_package(Poco COMPONENTS Foundation Util REQUIRED)
-
+MESSAGE(STATUS "Found Poco: ${Poco_LIBRARIES}")
+MESSAGE(STATUS "Found Boost: ${Boost_LIBRARIES}")
 
 # configure a header file to pass some of the CMake settings
 # to the source code
 #configure_file("${PROJECT_SOURCE_DIR}/src/version.h.in" "${PROJECT_BINARY_DIR}/gen/version.h")
+
 
 
 #
