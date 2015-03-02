@@ -1,5 +1,9 @@
 cmake_minimum_required(VERSION 2.6)
-project(libswarm_logger)
+project(libswarm_utils)
+
+#
+# Prune empty elements in lists
+#
 cmake_policy(SET CMP0007 NEW)
 
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake/")

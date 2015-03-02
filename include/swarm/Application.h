@@ -16,32 +16,27 @@
 // DEALINGS IN THE SOFTWARE.
 //
 
-#include <boost/filesystem.hpp>
-#include <iostream>
-
-#include "swarm/Logger.h"
+#ifndef SWARM_APPLICATION_H_INCLUDED
+#define	SWARM_APPLICATION_H_INCLUDED
 
 
-int main(int argc, char** argv) 
+#include <boost/noncopyable.hpp>
+
+namespace swarm
 {
-  (void)argc;
-  (void)argv;
   
-  boost::filesystem::path path("/home/joegen/Desktop/sample.log");
   
-  swarm::Logger::instance()->open(path.string(), swarm::Logger::PRIO_INFORMATION);
+  class Application : boost::noncopyable
+  {
+  public:
+    
+    Application();
+    
+    ~Application();
+  };
   
-  SWARM_LOG_FATAL("This is a sample FATAL log");
-  SWARM_LOG_CRITICAL("This is a sample CRITICAL log");
-  SWARM_LOG_ERROR("This is a sample ERROR log");
-  SWARM_LOG_WARNING("This is a sample WARNING log");
-  SWARM_LOG_NOTICE("This is a sample NOTICE log");
-  SWARM_LOG_INFO("This is a sample INFO log");
-  SWARM_LOG_DEBUG("This is a sample DEBUG log");
-  SWARM_LOG_TRACE("This is a sample TRACE log");
-  
-  swarm::Logger::releaseInstance();
-  
-  return 0;
-}
+} // swarm
+
+
+#endif	// SWARM_APPLICATION_H_INCLUDED
 
